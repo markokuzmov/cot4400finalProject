@@ -10,11 +10,13 @@ edge weights represent walking distance between buildings in meters.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
 from collections import deque
 from heapq import heappop, heappush
 from statistics import mean
 from time import perf_counter
+from textwrap import wrap
 from typing import Dict, Iterable, List, Tuple
 
 
@@ -340,6 +342,130 @@ def format_table(headers: List[str], rows: List[List[str]]) -> str:
     return "\n".join(lines)
 
 
+def build_networkx_graph(graph: WeightedGraph):
+    """Convert the adjacency-list graph into a NetworkX graph for plotting."""
+
+    import networkx as nx
+
+    nx_graph = nx.Graph()
+    seen_edges = set()
+
+    for vertex in graph.vertices():
+        nx_graph.add_node(vertex)
+
+    for source, neighbors in graph.adjacency.items():
+        for target, weight in neighbors.items():
+            edge_key = tuple(sorted((source, target)))
+            if edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
+            nx_graph.add_edge(source, target, weight=weight)
+
+    return nx_graph
+
+
+def visualize_graph(
+    graph: WeightedGraph,
+    highlight_path: List[str] | None = None,
+    save_path: str | None = None,
+    show: bool = True,
+) -> None:
+    """Render the campus graph with optional path highlighting.
+
+    The graph is drawn with node labels and weighted edges. If a shortest path
+    is supplied, the route is emphasized to make the navigation result easy to see.
+    """
+
+    import matplotlib.pyplot as plt
+    import networkx as nx
+
+    nx_graph = build_networkx_graph(graph)
+    positions = nx.spring_layout(nx_graph, seed=42, weight="weight")
+
+    path_edges = set()
+    path_nodes = set()
+    if highlight_path and len(highlight_path) >= 2:
+        path_nodes = set(highlight_path)
+        path_edges = {
+            tuple(sorted((highlight_path[index], highlight_path[index + 1])))
+            for index in range(len(highlight_path) - 1)
+        }
+
+    plt.figure(figsize=(16, 11))
+    plt.title("USF Campus Graph", fontsize=16, weight="bold")
+    plt.axis("off")
+
+    base_edges = list(nx_graph.edges())
+    highlighted_edge_list = [edge for edge in base_edges if tuple(sorted(edge)) in path_edges]
+    normal_edge_list = [edge for edge in base_edges if tuple(sorted(edge)) not in path_edges]
+
+    nx.draw_networkx_edges(
+        nx_graph,
+        positions,
+        edgelist=normal_edge_list,
+        width=1.4,
+        edge_color="#b8c1cc",
+        alpha=0.7,
+    )
+    if highlighted_edge_list:
+        nx.draw_networkx_edges(
+            nx_graph,
+            positions,
+            edgelist=highlighted_edge_list,
+            width=3.2,
+            edge_color="#d1495b",
+        )
+
+    node_colors = [
+        "#f4d35e"
+        if node in path_nodes and node not in {highlight_path[0], highlight_path[-1]}
+        else "#1d7874"
+        if highlight_path and node == highlight_path[0]
+        else "#ee964b"
+        if highlight_path and node == highlight_path[-1]
+        else "#4f6d7a"
+        for node in nx_graph.nodes()
+    ]
+
+    nx.draw_networkx_nodes(
+        nx_graph,
+        positions,
+        node_size=1800,
+        node_color=node_colors,
+        edgecolors="#1f1f1f",
+        linewidths=1.1,
+    )
+    wrapped_labels = {node: format_node_label(node) for node in nx_graph.nodes()}
+    nx.draw_networkx_labels(
+        nx_graph,
+        positions,
+        labels=wrapped_labels,
+        font_size=7.2,
+        font_color="#101820",
+        verticalalignment="center",
+        horizontalalignment="center",
+    )
+    edge_labels = nx.get_edge_attributes(nx_graph, "weight")
+    nx.draw_networkx_edge_labels(nx_graph, positions, edge_labels=edge_labels, font_size=7)
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=220, bbox_inches="tight")
+        print(f"Graph visualization saved to {save_path}")
+
+    if show:
+        plt.show()
+
+    plt.close()
+
+
+def format_node_label(name: str, max_width: int = 12) -> str:
+    """Wrap long building names so they fit more cleanly inside nodes."""
+
+    return "\n".join(wrap(name, width=max_width))
+
+
 def benchmark_algorithms() -> None:
     """Run the algorithms on different graph sizes and densities."""
 
@@ -405,12 +531,47 @@ def print_algorithm_demo(graph: WeightedGraph) -> None:
     print(f"Reachable buildings: {', '.join(reachable_buildings)}")
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command-line options for the demo and visualization."""
+
+    parser = argparse.ArgumentParser(
+        description="Campus Navigation and Infrastructure Optimization project"
+    )
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="Display the campus graph in a matplotlib window.",
+    )
+    parser.add_argument(
+        "--save-graph",
+        default=None,
+        metavar="PATH",
+        help="Save the graph visualization to an image file.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
     """Program entry point."""
 
+    args = parse_args()
     full_graph = build_campus_graph(20, "dense")
     validate_connected_graph(full_graph)
     print_algorithm_demo(full_graph)
+
+    if args.visualize or args.save_graph:
+        shortest_path, _ = dijkstra_shortest_path(
+            full_graph,
+            "Student Center",
+            "Lecture Hall Complex",
+        )
+        visualize_graph(
+            full_graph,
+            highlight_path=shortest_path,
+            save_path=args.save_graph,
+            show=args.visualize,
+        )
+
     benchmark_algorithms()
 
 

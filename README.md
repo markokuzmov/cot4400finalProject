@@ -18,6 +18,8 @@ This project models a university campus as a weighted, undirected graph and demo
 ## Requirements
 
 - Python 3.14+ or a compatible Python 3 environment
+- matplotlib
+- networkx
 
 ## Run
 
@@ -33,6 +35,18 @@ If you are using the provided virtual environment, you can also run:
 .venv/bin/python campus_graph_algorithms.py
 ```
 
+To display the graph visualization in a window, run:
+
+```bash
+python campus_graph_algorithms.py --visualize
+```
+
+To save the graph visualization as an image file, run:
+
+```bash
+python campus_graph_algorithms.py --save-graph campus_graph.png
+```
+
 ## Output
 
 The program prints:
@@ -40,4 +54,5 @@ The program prints:
 - A sample shortest path between two campus buildings
 - The total weight of the minimum spanning tree
 - A BFS traversal order for patrol/reachability
+- A campus graph visualization with the shortest route highlighted
 - A formatted benchmark table comparing graph sizes and densities
